@@ -2,10 +2,16 @@ name: Update Promotion PR Description
 
 on:
   pull_request:
-    types: [opened, reopened, synchronize]
+    types: [opened, reopened, synchronize, edited]
 
 jobs:
   update-description:
+    if: >-
+      startsWith(github.event.pull_request.title, 'chore(release): promote ') &&
+      (github.event.action == 'opened' ||
+      github.event.action == 'synchronize' ||
+      github.event.action == 'reopened' ||
+      (github.event.action == 'edited' && github.event.changes.title.from != ''))
     runs-on: ubuntu-latest
 
     steps:

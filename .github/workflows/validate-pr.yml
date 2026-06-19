@@ -29,9 +29,9 @@ jobs:
             fi
 
             # Title must follow Conventional Commits feat:/fix:
-            if ! [[ "$TITLE" =~ ^(feat|fix)(\([a-zA-Z0-9_-]+\))?:\ .+ ]]; then
+            if ! [[ "$TITLE" =~ ^[a-z]+(\([a-z0-9_-]+\))?:\ .+ ]]; then
               echo "❌ Invalid PR title for feature → develop."
-              echo "Expected: feat: xxx or fix: xxx (scope optional)"
+              echo "Expected: action: xxx or action(scope): xxx"
               exit 1
             fi
           fi
@@ -46,64 +46,40 @@ jobs:
             fi
 
             # Hotfix naming should follow fix:
-            if ! [[ "$TITLE" =~ ^fix(\([a-zA-Z0-9_-]+\))?:\ .+ ]]; then
-              echo "❌ Hotfix PR titles must start with fix: or fix(scope):"
+            if ! [[ "$TITLE" =~ ^[a-z]+(\([a-zA-Z0-9_-]+\))?:\ .+ ]]; then
+              echo "❌ Hotfix PR titles must start with action: or action(scope):"
               exit 1
             fi
           fi
 
           # -------------------------------
-          # PROMOTION PR RULES (Conventional Commits)
+          # PROMOTION PR RULES
           # -------------------------------
-          if [[ "$TITLE" =~ ^chore\(release\):\ promote\ ([a-z]+)\ to\ ([a-z]+)$ ]]; then
-            SRC_ENV="${BASH_REMATCH[1]}"
-            TGT_ENV="${BASH_REMATCH[2]}"
+          if [[ "$SRC" == "develop" || "$SRC" == "bat" || "$SRC" == "release" ]]; then
+            EXPECTED_TITLE="chore(release): promote $SRC to $TGT"
 
-            echo "Detected promotion: $SRC_ENV → $TGT_ENV"
-
-            # Validate allowed promotion paths
-            if [[ "$SRC_ENV" == "develop" && "$TGT_ENV" != "bat" ]]; then
+            # Enforce allowed promotion paths
+            if [[ "$SRC" == "develop" && "$TGT" != "bat" ]]; then
               echo "❌ develop can only be promoted to bat."
               exit 1
             fi
 
-            if [[ "$SRC_ENV" == "bat" && "$TGT_ENV" != "release" ]]; then
+            if [[ "$SRC" == "bat" && "$TGT" != "release" ]]; then
               echo "❌ bat can only be promoted to release."
               exit 1
             fi
 
-            if [[ "$SRC_ENV" == "release" && "$TGT_ENV" != "main" ]]; then
+            if [[ "$SRC" == "release" && "$TGT" != "main" ]]; then
               echo "❌ release can only be promoted to main."
               exit 1
             fi
 
-            # Ensure PR target matches the promotion target
-            if [[ "$TGT" != "$TGT_ENV" ]]; then
-              echo "❌ PR target branch ($TGT) does not match promotion target ($TGT_ENV)."
+            # Enforce exact lowercase promotion title format
+            if [[ "$TITLE" != "$EXPECTED_TITLE" ]]; then
+              echo "❌ Invalid promotion PR title."
+              echo "Expected: $EXPECTED_TITLE"
               exit 1
             fi
-          fi
-
-          # -------------------------------
-          # MERGE PATH RULES (Global)
-          # -------------------------------
-
-          # Develop → only bat
-          if [[ "$SRC" == "develop" && "$TGT" != "bat" ]]; then
-            echo "❌ develop can only merge into bat."
-            exit 1
-          fi
-
-          # BAT → only release
-          if [[ "$SRC" == "bat" && "$TGT" != "release" ]]; then
-            echo "❌ bat can only merge into release."
-            exit 1
-          fi
-
-          # Release → only main
-          if [[ "$SRC" == "release" && "$TGT" != "main" ]]; then
-            echo "❌ release can only merge into main."
-            exit 1
           fi
 
           echo "✔ All PR naming and merge rules validated successfully."
