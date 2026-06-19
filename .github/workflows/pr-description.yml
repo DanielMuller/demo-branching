@@ -1,0 +1,86 @@
+name: Update Promotion PR Description
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  update-description:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check if this is a promotion PR
+        id: check
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+
+          if [[ "$TITLE" =~ ^chore\(release\):\ promote\ ([a-z]+)\ to\ ([a-z]+)$ ]]; then
+            echo "is_promotion=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_promotion=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Stop if not a promotion PR
+        if: steps.check.outputs.is_promotion == 'false'
+        run: echo "Not a promotion PR, skipping."
+
+      - name: Fetch commits in PR
+        if: steps.check.outputs.is_promotion == 'true'
+        id: commits
+        run: |
+          # Fetch commits
+          COMMITS=$(gh api \
+            repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/commits \
+            --jq '.[] | {sha: .sha, msg: .commit.message | split("\n")[0]}' )
+
+          echo "$COMMITS" > commits.json
+
+          # Prepare grouped changelog
+          declare -A GROUPS
+          GROUPS=( ["feat"]="" ["fix"]="" ["chore"]="" ["refactor"]="" ["docs"]="" ["test"]="" ["perf"]="" ["other"]="" )
+
+          while read -r SHA MSG; do
+            SHORT=$(echo "$SHA" | cut -c1-7)
+            LINK="https://github.com/${{ github.repository }}/commit/$SHA"
+            ENTRY="- [$SHORT]($LINK): $MSG"
+
+            if [[ "$MSG" =~ ^feat ]]; then GROUPS["feat"]+="$ENTRY"$'\n'
+            elif [[ "$MSG" =~ ^fix ]]; then GROUPS["fix"]+="$ENTRY"$'\n'
+            elif [[ "$MSG" =~ ^chore ]]; then GROUPS["chore"]+="$ENTRY"$'\n'
+            elif [[ "$MSG" =~ ^refactor ]]; then GROUPS["refactor"]+="$ENTRY"$'\n'
+            elif [[ "$MSG" =~ ^docs ]]; then GROUPS["docs"]+="$ENTRY"$'\n'
+            elif [[ "$MSG" =~ ^test ]]; then GROUPS["test"]+="$ENTRY"$'\n'
+            elif [[ "$MSG" =~ ^perf ]]; then GROUPS["perf"]+="$ENTRY"$'\n'
+            else GROUPS["other"]+="$ENTRY"$'\n'
+            fi
+          done < <(jq -r '.[] | "\(.sha) \(.msg)"' commits.json)
+
+          # Build final markdown
+          OUTPUT="### Included Commits\n"
+          OUTPUT+="<details>\n<summary>Click to expand changelog</summary>\n\n"
+
+          for TYPE in feat fix chore refactor docs test perf other; do
+            if [[ -n "${GROUPS[$TYPE]}" ]]; then
+              OUTPUT+="#### ${TYPE^}\n${GROUPS[$TYPE]}\n"
+            fi
+          done
+
+          OUTPUT+="</details>"
+
+          # Export
+          echo "markdown<<EOF" >> $GITHUB_OUTPUT
+          echo "$OUTPUT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Update PR description
+        if: steps.check.outputs.is_promotion == 'true'
+        run: |
+          BODY="${{ github.event.pull_request.body }}"
+          NEW="${{ steps.commits.outputs.markdown }}"
+
+          UPDATED="$BODY"$'\n\n'"$NEW"
+
+          gh api \
+            --method PATCH \
+            repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }} \
+            -f body="$UPDATED"
