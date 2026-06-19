@@ -47,7 +47,16 @@ jobs:
           echo "$COMMITS" > commits.json
 
           # Prepare grouped changelog
-          declare -A GROUPS=( ["feat"]="" ["fix"]="" ["chore"]="" ["refactor"]="" ["docs"]="" ["test"]="" ["perf"]="" ["other"]="" )
+          unset GROUPS
+          declare -A GROUPS
+          GROUPS["feat"]=""
+          GROUPS["fix"]=""
+          GROUPS["chore"]=""
+          GROUPS["refactor"]=""
+          GROUPS["docs"]=""
+          GROUPS["test"]=""
+          GROUPS["perf"]=""
+          GROUPS["other"]=""
 
           while read -r SHA MSG; do
             SHORT=$(echo "$SHA" | cut -c1-7)
