@@ -1,4 +1,4 @@
-name: Validate PR Naming, Merge Rules & Merge Method
+name: Validate PR Naming & Merge Rules
 
 on:
   pull_request:
@@ -8,124 +8,102 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - name: Validate PR rules
+      - name: Validate PR title and merge rules
         run: |
           SRC="${{ github.head_ref }}"
           TGT="${{ github.base_ref }}"
           TITLE="${{ github.event.pull_request.title }}"
-          MERGE_METHOD="${{ github.event.pull_request.auto_merge.merge_method }}"
 
-          echo "Source: $SRC"
-          echo "Target: $TGT"
-          echo "Title:  $TITLE"
-          echo "Merge method (auto-merge): $MERGE_METHOD"
+          echo "Source branch: $SRC"
+          echo "Target branch: $TGT"
+          echo "PR Title: $TITLE"
 
-          # ---------------------------------------------------------
-          # Helper: enforce merge method (if auto-merge is enabled)
-          # ---------------------------------------------------------
-          require_squash() {
-            if [[ "$MERGE_METHOD" != "" && "$MERGE_METHOD" != "squash" ]]; then
-              echo "❌ This PR must use SQUASH merge."
-              exit 1
-            fi
-          }
-
-          require_merge_commit() {
-            if [[ "$MERGE_METHOD" != "" && "$MERGE_METHOD" != "merge" ]]; then
-              echo "❌ This PR must use a MERGE COMMIT."
-              exit 1
-            fi
-          }
-
-          # ---------------------------------------------------------
+          # -------------------------------
           # FEATURE BRANCH RULES
-          # ---------------------------------------------------------
+          # -------------------------------
           if [[ "$SRC" == feature/* ]]; then
+            # Feature branches can ONLY merge into develop
             if [[ "$TGT" != "develop" ]]; then
               echo "❌ Feature branches can only merge into develop."
               exit 1
             fi
 
-            # Enforce squash merge for feature → develop
-            require_squash
-
-            # Title must follow feat:/fix:
+            # Title must follow Conventional Commits feat:/fix:
             if ! [[ "$TITLE" =~ ^(feat|fix)(\([a-zA-Z0-9_-]+\))?:\ .+ ]]; then
-              echo "❌ Feature PR titles must follow feat: or fix:"
+              echo "❌ Invalid PR title for feature → develop."
+              echo "Expected: feat: xxx or fix: xxx (scope optional)"
               exit 1
             fi
           fi
 
-          # ---------------------------------------------------------
+          # -------------------------------
           # HOTFIX RULES
-          # ---------------------------------------------------------
+          # -------------------------------
           if [[ "$SRC" == hotfix/* ]]; then
             if [[ "$TGT" != "develop" && "$TGT" != "bat" && "$TGT" != "release" ]]; then
-              echo "❌ Hotfix branches can only merge into develop, bat, or release."
+              echo "❌ hotfix branches can only merge into develop, bat, or release."
               exit 1
             fi
 
-            # Hotfix → develop must be MERGE COMMIT
-            if [[ "$TGT" == "develop" ]]; then
-              require_merge_commit
-            fi
-
-            # Title must follow fix:
+            # Hotfix naming should follow fix:
             if ! [[ "$TITLE" =~ ^fix(\([a-zA-Z0-9_-]+\))?:\ .+ ]]; then
-              echo "❌ Hotfix PR titles must start with fix:"
+              echo "❌ Hotfix PR titles must start with fix: or fix(scope):"
               exit 1
             fi
           fi
 
-          # ---------------------------------------------------------
-          # PROMOTION PR RULES
-          # ---------------------------------------------------------
+          # -------------------------------
+          # PROMOTION PR RULES (Conventional Commits)
+          # -------------------------------
           if [[ "$TITLE" =~ ^chore\(release\):\ promote\ ([a-z]+)\ to\ ([a-z]+)$ ]]; then
             SRC_ENV="${BASH_REMATCH[1]}"
             TGT_ENV="${BASH_REMATCH[2]}"
 
             echo "Detected promotion: $SRC_ENV → $TGT_ENV"
 
-            # All promotions must use MERGE COMMIT
-            require_merge_commit
-
-            # Validate promotion path
+            # Validate allowed promotion paths
             if [[ "$SRC_ENV" == "develop" && "$TGT_ENV" != "bat" ]]; then
-              echo "❌ develop can only promote to bat."
-              exit 1
-            fi
-            if [[ "$SRC_ENV" == "bat" && "$TGT_ENV" != "release" ]]; then
-              echo "❌ bat can only promote to release."
-              exit 1
-            fi
-            if [[ "$SRC_ENV" == "release" && "$TGT_ENV" != "main" ]]; then
-              echo "❌ release can only promote to main."
+              echo "❌ develop can only be promoted to bat."
               exit 1
             fi
 
-            # Ensure PR target matches promotion target
+            if [[ "$SRC_ENV" == "bat" && "$TGT_ENV" != "release" ]]; then
+              echo "❌ bat can only be promoted to release."
+              exit 1
+            fi
+
+            if [[ "$SRC_ENV" == "release" && "$TGT_ENV" != "main" ]]; then
+              echo "❌ release can only be promoted to main."
+              exit 1
+            fi
+
+            # Ensure PR target matches the promotion target
             if [[ "$TGT" != "$TGT_ENV" ]]; then
               echo "❌ PR target branch ($TGT) does not match promotion target ($TGT_ENV)."
               exit 1
             fi
           fi
 
-          # ---------------------------------------------------------
-          # GLOBAL MERGE PATH RULES
-          # ---------------------------------------------------------
+          # -------------------------------
+          # MERGE PATH RULES (Global)
+          # -------------------------------
+
+          # Develop → only bat
           if [[ "$SRC" == "develop" && "$TGT" != "bat" ]]; then
             echo "❌ develop can only merge into bat."
             exit 1
           fi
 
+          # BAT → only release
           if [[ "$SRC" == "bat" && "$TGT" != "release" ]]; then
             echo "❌ bat can only merge into release."
             exit 1
           fi
 
+          # Release → only main
           if [[ "$SRC" == "release" && "$TGT" != "main" ]]; then
             echo "❌ release can only merge into main."
             exit 1
           fi
 
-          echo "✔ All PR rules validated successfully."
+          echo "✔ All PR naming and merge rules validated successfully."
