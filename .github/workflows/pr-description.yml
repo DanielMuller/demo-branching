@@ -39,12 +39,10 @@ jobs:
         if: steps.check.outputs.is_promotion == 'true'
         id: commits
         run: |
-          # Fetch commits
-          COMMITS=$(gh api \
+          # Fetch commits as "sha message" lines directly
+          gh api \
             repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/commits \
-            --jq '.[] | {sha: .sha, msg: .commit.message | split("\n")[0]}' )
-
-          echo "$COMMITS" > commits.json
+            --jq '.[] | "\(.sha) \(.commit.message | split("\n")[0])"' > commits.txt
 
           # Prepare grouped changelog
           unset GROUPS
@@ -72,7 +70,7 @@ jobs:
             elif [[ "$MSG" =~ ^perf ]]; then GROUPS["perf"]+="$ENTRY"$'\n'
             else GROUPS["other"]+="$ENTRY"$'\n'
             fi
-          done < <(jq -r '.[] | "\(.sha) \(.msg)"' commits.json)
+          done < commits.txt
 
           # Build final markdown
           NL=$'\n'
