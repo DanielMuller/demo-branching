@@ -66,16 +66,14 @@ jobs:
           done < <(jq -r '.[] | "\(.sha) \(.msg)"' commits.json)
 
           # Build final markdown
-          OUTPUT="### Included Commits\n"
-          OUTPUT+="<details>\n<summary>Click to expand changelog</summary>\n\n"
+          NL=$'\n'
+          OUTPUT="## Included Commits"
 
           for TYPE in feat fix chore refactor docs test perf other; do
             if [[ -n "${GROUPS[$TYPE]}" ]]; then
-              OUTPUT+="#### ${TYPE^}\n${GROUPS[$TYPE]}\n"
+              OUTPUT+="${NL}${NL}#### ${TYPE^}${NL}${GROUPS[$TYPE]}"
             fi
           done
-
-          OUTPUT+="</details>"
 
           # Export
           echo "markdown<<EOF" >> $GITHUB_OUTPUT
