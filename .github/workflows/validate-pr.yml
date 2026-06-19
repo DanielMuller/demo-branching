@@ -1,0 +1,85 @@
+name: Validate PR Naming & Merge Rules
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR title and merge rules
+        run: |
+          SRC="${{ github.head_ref }}"
+          TGT="${{ github.base_ref }}"
+          TITLE="${{ github.event.pull_request.title }}"
+
+          echo "Source branch: $SRC"
+          echo "Target branch: $TGT"
+          echo "PR Title: $TITLE"
+
+          # -------------------------------
+          # FEATURE BRANCH RULES
+          # -------------------------------
+          if [[ "$SRC" == feature/* ]]; then
+            # Feature branches can ONLY merge into develop
+            if [[ "$TGT" != "develop" ]]; then
+              echo "❌ Feature branches can only merge into develop."
+              exit 1
+            fi
+
+            # Title must follow Conventional Commits feat:/fix:
+            if ! [[ "$TITLE" =~ ^[a-z]+(\([a-z0-9_-]+\))?:\ .+ ]]; then
+              echo "❌ Invalid PR title for feature → develop."
+              echo "Expected: action: xxx or action(scope): xxx"
+              exit 1
+            fi
+          fi
+
+          # -------------------------------
+          # HOTFIX RULES
+          # -------------------------------
+          if [[ "$SRC" == hotfix/* ]]; then
+            if [[ "$TGT" != "develop" && "$TGT" != "bat" && "$TGT" != "release" ]]; then
+              echo "❌ hotfix branches can only merge into develop, bat, or release."
+              exit 1
+            fi
+
+            # Hotfix naming should follow fix:
+            if ! [[ "$TITLE" =~ ^[a-z]+(\([a-zA-Z0-9_-]+\))?:\ .+ ]]; then
+              echo "❌ Hotfix PR titles must start with action: or action(scope):"
+              exit 1
+            fi
+          fi
+
+          # -------------------------------
+          # PROMOTION PR RULES
+          # -------------------------------
+          if [[ "$SRC" == "develop" || "$SRC" == "bat" || "$SRC" == "release" ]]; then
+            EXPECTED_TITLE="chore(release): promote $SRC to $TGT"
+
+            # Enforce allowed promotion paths
+            if [[ "$SRC" == "develop" && "$TGT" != "bat" ]]; then
+              echo "❌ develop can only be promoted to bat."
+              exit 1
+            fi
+
+            if [[ "$SRC" == "bat" && "$TGT" != "release" ]]; then
+              echo "❌ bat can only be promoted to release."
+              exit 1
+            fi
+
+            if [[ "$SRC" == "release" && "$TGT" != "main" ]]; then
+              echo "❌ release can only be promoted to main."
+              exit 1
+            fi
+
+            # Enforce exact lowercase promotion title format
+            if [[ "$TITLE" != "$EXPECTED_TITLE" ]]; then
+              echo "❌ Invalid promotion PR title."
+              echo "Expected: $EXPECTED_TITLE"
+              exit 1
+            fi
+          fi
+
+          echo "✔ All PR naming and merge rules validated successfully."

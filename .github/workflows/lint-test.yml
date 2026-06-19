@@ -1,0 +1,31 @@
+name: Lint
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+  push:
+    branches:
+      - feature/*
+      - hotfix/*
+      - develop
+      - bat
+      - release
+      - main
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Return true
+        run: "true"
+
+  test:
+    name: test
+    needs: lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Return true
+        run: "true"
